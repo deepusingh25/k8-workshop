@@ -1,0 +1,116 @@
+// pipeline {
+//     agent any
+
+//     // tools {
+//     //     jdk 'JDK 21'            // Make sure this is configured in Jenkins
+//     //     maven 'Maven 3.8'       // Also configure this in Jenkins tools section
+//     // }
+
+//     environment {
+//         NEXUS_URL = '13.217.60.181:8081'
+//         DOCKER_REGISTRY = '13.217.60.181:8083' // Nexus Docker registry port
+//         IMAGE_NAME = 'database-service-project'
+//         NEXUS_CREDENTIALS = credentials('nexus-credentials-id') // Jenkins Credentials ID
+//     }
+
+//     stages {
+//         stage('Checkout Code') {
+//             steps {
+//                 git 'https://github.com/deepusingh25/k8-workshop.git'
+//             }
+//         }
+
+//         stage('Build with Maven') {
+//             steps {
+//                 sh 'mvn clean package -DskipTests=false'
+//             }
+//         }
+
+//         stage('Deploy JAR to Nexus Maven Repo') {
+//             steps {
+//                 sh '''
+//                     mvn deploy \
+//                     -Dnexus.username=$NEXUS_CREDENTIALS_USR \
+//                     -Dnexus.password=$NEXUS_CREDENTIALS_PSW
+//                 '''
+//             }
+//         }
+
+//         stage('Build Docker Image') {
+//             steps {
+//                 script {
+//                     docker.build("${DOCKER_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER}")
+//                 }
+//             }
+//         }
+
+//         stage('Push Docker Image to Nexus Docker Registry') {
+//             steps {
+//                 script {
+//                     docker.withRegistry("http://${DOCKER_REGISTRY}", 'nexus-credentials-id') {
+//                         docker.image("${DOCKER_REGISTRY}/${IMAGE_NAME}:${BUILD_NUMBER}")
+//                               .push("latest")
+//                     }
+//                 }
+//             }
+//         }
+//     }
+
+//     post {
+//         success {
+//             echo "✅ Build, Maven deploy, and Docker image push to Nexus succeeded!"
+//         }
+//         failure {
+//             echo "❌ Build failed. Check console output for details."
+//         }
+//     }
+// }
+
+
+pipeline {
+    agent any
+    tools {
+        //jdk 'JDK 21'            // Make sure this is configured in Jenkins
+        maven 'Maven 3.8'       // Also configure this in Jenkins tools section
+    }
+    stages {
+        stage('Checkout Code') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: '*/main']], // Adjust if needed
+                    userRemoteConfigs: [[
+                        url: 'https://github.com/deepusingh25/k8-workshop.git',
+                        credentialsId: 'github_token' // Add your GitHub PAT credentials
+                    ]]
+                ])
+            }
+        }
+
+        stage('Build Artifact') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Push to Nexus') {
+            steps {
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus3',
+                    protocol: 'http',
+                    nexusUrl: '13.217.60.181:8081',
+                    groupId: 'org.springframework.boot',
+                    version: '3.2.4',
+                    credentialsId: 'nexus-credentials-id',
+                    repository: 'workshop1',
+                    artifacts: [[
+                        artifactId: 'spring-boot-starter-parent',
+                        classifier: '',
+                        file: 'my-service-1.0.0.jar', // Make sure this path is correct
+                        type: 'jar'
+                    ]]
+                )
+            }
+        }
+    }
+}

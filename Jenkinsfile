@@ -1,32 +1,40 @@
 pipeline {
     agent any
-    
-    tools {
-        maven 'maven3.6'
-        jdk 'jdk17'
+
+    environment {
+        // Jenkins credential ID for your SonarQube token
+        SONAR_TOKEN = credentials('workshop_token')
+    }
+    stages {
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    echo 'Starting SonarQube code analysis...'
+                }
+                catchError(buildResult: 'FAILURE', stageResult: 'FAILURE') {
+                    withSonarQubeEnv('SonarQube') {
+                        // If using a sonar-project.properties file, you can remove -D options
+                        sh """
+                            ${tool 'SonarScanner'}/bin/sonar-scanner \
+                            -Dsonar.projectKey=workshop1 \
+                            -Dsonar.sources=. \
+                            -Dsonar.login=$SONAR_TOKEN
+                        """
+                    }
+                }
+            }
+        }
     }
 
-    stages {
-        
-        stage('Compile') {
-            steps {
-             sh 'mvn compile'
-            }
+    post {
+        always {
+            echo 'Pipeline execution completed.'
         }
-        stage('test') {
-            steps {
-                sh 'mvn test'
-            }
+        success {
+            echo 'Code passed SonarQube Quality Gate!'
         }
-        stage('Package') {
-            steps {
-               sh 'mvn package'
-            }
-        }
-        stage('Hello') {
-            steps {
-                echo 'Hello World'
-            }
+        failure {
+            echo 'Pipeline failed. Check logs and SonarQube analysis results.'
         }
     }
 }
